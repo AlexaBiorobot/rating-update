@@ -31,7 +31,7 @@ jobs:
       - name: Run custom update script
         env:
           GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-        run: python update_custom.py
+        run: python ISM-update.py
 
       - name: Notify success
         run: echo "✅ Custom columns updated successfully"
