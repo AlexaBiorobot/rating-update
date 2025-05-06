@@ -1,3 +1,10 @@
+name: Update Groups sheet
+
+on:
+  workflow_dispatch:      # ручной запуск
+  schedule:
+    - cron: "0 * * * *"   # каждый час
+
 jobs:
   update-tutors:
     runs-on: ubuntu-latest
