@@ -10,8 +10,8 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from gspread_dataframe import set_with_dataframe
 
-# Логирование в консоль
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
 
 def main():
     # 1) Авторизация сервис-аккаунтом
@@ -25,40 +25,43 @@ def main():
     client = gspread.authorize(creds)
     logging.info("✔ Авторизованы в Google Sheets")
 
-    # 2) Формируем URL CSV-экспорта с access_token в запросе
-    src_id = os.environ["SOURCE_SS_ID"]
-    gid    = os.environ["SOURCE_SHEET_GID"]    # GID листа Tutors
-    token  = creds.get_access_token().access_token
+    # 2) Собираем export URL (без токена! только format & gid)
+    src_id     = os.environ["SOURCE_SS_ID"]
+    gid        = os.environ["SOURCE_SHEET_GID"]
+    export_url = f"https://docs.google.com/spreadsheets/d/{src_id}/export?format=csv&gid={gid}"
+    token      = creds.get_access_token().access_token
 
-    export_url = (
-        f"https://docs.google.com/spreadsheets/d/{src_id}/export"
-        f"?access_token={token}"
-        f"&format=csv"
-        f"&gid={gid}"
-    )
-    logging.info(f"→ Экспорт CSV: {export_url[:80]}…")
+    # 3) Делаем запрос и вручную следуем редиректу
+    session = requests.Session()
+    session.headers.update({"Authorization": f"Bearer {token}"})
 
-    # 3) Делаем простой запрос — токен в URL сохранится на любом хосте
-    resp = requests.get(export_url)
-    resp.raise_for_status()
-    logging.info(f"→ Получено {len(resp.content)} байт CSV")
+    # первый шаг: получить Location
+    r = session.get(export_url, allow_redirects=False)
+    if r.status_code in (301, 302, 303, 307, 308):
+        redirect_url = r.headers["Location"]
+        logging.info(f"→ Редирект на: {redirect_url}")
+        r = session.get(redirect_url)  # здесь будет сохранён header
 
-    # 4) Читаем в pandas и оставляем только колонки A,B,C,E,V
-    text = resp.content.decode("utf-8")
-    df = pd.read_csv(io.StringIO(text), encoding="utf-8")
-    df = df.iloc[:, [0, 1, 2, 4, 21]]  # A=0, B=1, C=2, E=4, V=21
-    logging.info(f"→ Оставили колонки A,B,C,E,V — всего {len(df)} строк")
+    r.raise_for_status()
+    logging.info(f"→ CSV экспорт получен: {len(r.content)} байт")
 
-    # 5) Открываем целевую таблицу и лист
+    # 4) Явно декодируем в UTF-8 и парсим
+    text = r.content.decode("utf-8")
+    df   = pd.read_csv(io.StringIO(text), encoding="utf-8")
+    # оставляем только A,B,C,E,V
+    df = df.iloc[:, [0, 1, 2, 4, 21]]
+    logging.info(f"→ Оставили колонки A,B,C,E,V — {len(df)} строк")
+
+    # 5) Запись в целевой лист
     dst_id    = os.environ["DEST_SS_ID"]
     dst_sheet = os.environ.get("DEST_SHEET", "Tutors")
     sh_dst    = client.open_by_key(dst_id)
     ws_dst    = sh_dst.worksheet(dst_sheet)
 
-    # 6) Очищаем и заливаем новый DataFrame
     ws_dst.clear()
     set_with_dataframe(ws_dst, df)
-    logging.info(f"✔ Данные записаны в лист '{dst_sheet}' (ID={dst_id}) — {len(df)} строк")
+    logging.info(f"✔ Данные записаны в лист '{dst_sheet}' — {len(df)} строк")
+
 
 if __name__ == "__main__":
     main()
