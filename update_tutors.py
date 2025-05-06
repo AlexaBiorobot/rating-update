@@ -48,7 +48,7 @@ def main():
     df   = pd.read_csv(io.StringIO(text), encoding="utf-8")
 
     # 5) Оставляем только колонки A,B,C,E,V  (индексы 0,1,2,4,21)
-    df = df.iloc[:, [0, 1, 2, 4, 21]]
+    df = df.iloc[:, [0, 1, 2, 21, 4]]
     logging.info(f"→ Оставили колонки A,B,C,E,V — {len(df)} строк")
 
     # 6) Открываем целевую таблицу и лист
