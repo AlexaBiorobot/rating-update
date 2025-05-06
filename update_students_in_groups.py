@@ -12,7 +12,7 @@ from gspread.exceptions import APIError
 
 # —————————————————————————————
 # Константы
-SRC_SS_ID       = os.environ["SRC_SS_ID"]
+SRC_SS_ID       = "1XwyahhHC7uVzwfoErrvwrcruEjwewqIUp2u-6nvdSR0"
 SRC_SHEET_TITLE = "data"
 
 DST_SS_ID       = "1SudB1YkPD0Tt7xkEiNJypRv0vb62BSdsCLrcrGqALAI"
@@ -58,10 +58,9 @@ def main():
     # 3) Формируем DataFrame и фильтруем по B содержит COL|CHI|ESP
     header = data[0]
     df_all = pd.DataFrame(data[1:], columns=header)
-    mask = df_all.iloc[:,1].str.contains(r"COL|CHI|ESP", case=False, na=False)
-    df = df_all[mask].iloc[:, :8]  # берём колонки A–H
-    logging.info(f"→ Отобрано {len(df)} строк (A–H)")
-
+    df = df_all.iloc[:, [1, 13]]
+    logging.info(f"→ Отобрано {len(df)} строк с колонками B и N")
+    
     # 4) Пишем в целевой лист
     sh_dst = client.open_by_key(DST_SS_ID)
     ws_dst = sh_dst.worksheet(DST_SHEET_TITLE)
