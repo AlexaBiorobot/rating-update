@@ -58,7 +58,7 @@ def main():
     # 3) Формируем DataFrame и фильтруем по B содержит COL|CHI|ESP
     header = data[0]
     df_all = pd.DataFrame(data[1:], columns=header)
-    df = df_all.iloc[:, [1, 13]]
+    df = df_all.iloc[:, [1, 13, 14, 3]]
     logging.info(f"→ Отобрано {len(df)} строк с колонками B и N")
     
     # 4) Пишем в целевой лист
