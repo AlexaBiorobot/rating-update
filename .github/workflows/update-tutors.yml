@@ -1,9 +1,9 @@
 name: Update Tutors sheet
 
 on:
-  workflow_dispatch:      # можно запустить вручную
+  workflow_dispatch:      # ручной запуск
   schedule:
-    - cron: "0 * * * *"   # автоматически каждый час
+    - cron: "0 * * * *"   # каждый час
 
 jobs:
   update-tutors:
@@ -25,7 +25,7 @@ jobs:
         env:
           GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           SOURCE_SS_ID:        ${{ secrets.SOURCE_SS_ID }}
-          SOURCE_SHEET:        ${{ secrets.SOURCE_SHEET }}
+          SOURCE_SHEET_GID:    ${{ secrets.SOURCE_SHEET_GID }}
           DEST_SS_ID:          ${{ secrets.DEST_SS_ID }}
           DEST_SHEET:          ${{ secrets.DEST_SHEET }}
         run: |
