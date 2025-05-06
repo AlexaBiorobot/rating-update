@@ -1,4 +1,4 @@
-name: Update Tutors sheet
+name: Update Groups sheet
 
 on:
   workflow_dispatch:      # ручной запуск
