@@ -1,0 +1,35 @@
+name: Update Tutors sheet
+
+on:
+  workflow_dispatch:      # можно запустить вручную
+  schedule:
+    - cron: "0 * * * *"   # автоматически каждый час
+
+jobs:
+  update-tutors:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run update script
+        env:
+          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          SOURCE_SS_ID:        ${{ secrets.SOURCE_SS_ID }}
+          SOURCE_SHEET:        ${{ secrets.SOURCE_SHEET }}
+          DEST_SS_ID:          ${{ secrets.DEST_SS_ID }}
+          DEST_SHEET:          ${{ secrets.DEST_SHEET }}
+        run: |
+          python update_tutors.py
+
+      - name: Log completion
+        run: echo "✅ Tutors sheet updated successfully"
