@@ -1,0 +1,36 @@
+name: Update Students_in_groups
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */4 * * *"  # каждые 4 часа
+
+jobs:
+  update-filtered:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install \
+            pandas \
+            gspread \
+            oauth2client \
+            gspread-dataframe
+
+      - name: Run students in groups update
+        env:
+          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+        run: update_students_in_groups.py
+
+      - name: Finish
+        run: echo "✅ Filtered Students_in_groups updated"
