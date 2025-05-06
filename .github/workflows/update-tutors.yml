@@ -1,4 +1,4 @@
-name: Update Google Sheet
+name: Update Tutors
 
 on:
   workflow_dispatch:
