@@ -1,4 +1,4 @@
-name: Update Tutors
+name: Update Rates
 
 on:
   workflow_dispatch:
