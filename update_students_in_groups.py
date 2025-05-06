@@ -12,7 +12,7 @@ from gspread.exceptions import APIError
 
 # —————————————————————————————
 # Константы
-SRC_SS_ID       = "1XwyahhHC7uVzwfoErrvwrcruEjwewqIUp2u-6nvdSR0"
+SRC_SS_ID       = os.environ["SOURCE_SS_ID"]
 SRC_SHEET_TITLE = "data"
 
 DST_SS_ID       = "1SudB1YkPD0Tt7xkEiNJypRv0vb62BSdsCLrcrGqALAI"
