@@ -15,8 +15,8 @@ from gspread.exceptions import APIError
 SRC_SS_ID       = "1XwyahhHC7uVzwfoErrvwrcruEjwewqIUp2u-6nvdSR0"
 SRC_SHEET_TITLE = "data"
 
-DST_SS_ID       = "1SudB1YkPD0Tt7xkEiNJypRv0vb62BSdsCLrcrGqALAI"
-DST_SHEET_TITLE = "Students_in_groups"
+DST_SS_ID       = "16QrbLtzLTV6GqyT8HYwzcwYIsXewzjUbM0Jy5i1fENE"
+DST_SHEET_TITLE = "Students"
 # —————————————————————————————
 
 # Логирование
