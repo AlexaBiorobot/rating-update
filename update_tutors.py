@@ -44,7 +44,8 @@ def main():
     logging.info(f"→ Получено {len(resp.content)} байт CSV")
 
     # 4) Читаем в pandas и оставляем только колонки A,B,C,E,V
-    df = pd.read_csv(io.StringIO(resp.text))
+    text = resp.content.decode("utf-8")
+    df = pd.read_csv(io.StringIO(text), encoding="utf-8")
     df = df.iloc[:, [0, 1, 2, 4, 21]]  # A=0, B=1, C=2, E=4, V=21
     logging.info(f"→ Оставили колонки A,B,C,E,V — всего {len(df)} строк")
 
