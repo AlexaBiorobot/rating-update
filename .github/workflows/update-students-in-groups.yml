@@ -30,7 +30,6 @@ jobs:
       - name: Run students in groups update
         env:
           GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          SRC_SS_ID:        ${{ secrets.SRC_SS_ID }}
         run: python update_students_in_groups.py
 
       - name: Finish
