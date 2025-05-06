@@ -30,7 +30,7 @@ jobs:
       - name: Run students in groups update
         env:
           GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-        run: update_students_in_groups.py
+        run: python update_students_in_groups.py
 
       - name: Finish
         run: echo "✅ Filtered Students_in_groups updated"
