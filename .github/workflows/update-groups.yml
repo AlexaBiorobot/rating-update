@@ -1,10 +1,3 @@
-name: Update Groups sheet
-
-on:
-  workflow_dispatch:      # ручной запуск
-  schedule:
-    - cron: "0 * * * *"   # каждый час
-
 jobs:
   update-tutors:
     runs-on: ubuntu-latest
@@ -24,10 +17,6 @@ jobs:
       - name: Run update script
         env:
           GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          SOURCE_SS_ID:        ${{ secrets.SOURCE_SS_ID }}
-          SOURCE_SHEET_GID:    "Groups & Teachers"
-          DEST_SS_ID:          ${{ secrets.DEST_SS_ID }}
-          DEST_SHEET:          "Groups"
         run: |
           python update_tutors.py
 
