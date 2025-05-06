@@ -62,12 +62,20 @@ def main():
     df      = df_src.iloc[:, [2, 3, 14, 12, 5]]
     logging.info(f"→ Оставили колонки C,D,O,M,F: {df.shape[0]} строк")
 
-    # 4) Записываем в целевой лист
+    # 4) Записываем в целевой лист — только в столбцы A:E
     sh_dst = client.open_by_key(DEST_SS_ID)
     ws_dst = sh_dst.worksheet(DEST_SHEET_NAME)
-    ws_dst.clear()
-    set_with_dataframe(ws_dst, df)
-    logging.info(f"✔ Данные записаны в «{DEST_SHEET_NAME}» ({DEST_SS_ID}) — {df.shape[0]} строк")
+
+    ws_dst.batch_clear(["A:E"])
+    set_with_dataframe(
+        ws_dst,
+        df,
+        row=1,
+        col=1,
+        include_index=False,
+        include_column_header=True
+    )
+    logging.info(f"✔ Данные из столбцов C,D,O,M,F записаны в A:E — {df.shape[0]} строк")
 
 if __name__ == "__main__":
     main()
