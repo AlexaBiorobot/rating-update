@@ -1,12 +1,10 @@
-import os
-import json
+import os, json, logging, io
 import pandas as pd
+import requests
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from gspread_dataframe import set_with_dataframe
-import logging
 
-# — настраиваем логирование в консоль
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 def main():
@@ -18,31 +16,27 @@ def main():
     client = gspread.authorize(creds)
     logging.info("✔ Авторизовались в Google Sheets")
 
-    # 2) Скачиваем исходную таблицу и лист
-    src_id    = os.environ["SOURCE_SS_ID"]
-    src_sheet = os.environ.get("SOURCE_SHEET", "Tutors")
-    sh_src    = client.open_by_key(src_id)
-    ws_src    = sh_src.worksheet(src_sheet)
-    all_vals  = ws_src.get_all_values()
-    logging.info(f"→ Открыли исходный лист '{src_sheet}' (ID={src_id}), строк: {len(all_vals)-1}")
+    # 2) Экспорт CSV
+    src_id  = os.environ["SOURCE_SS_ID"]
+    gid     = os.environ["SOURCE_SHEET_GID"]
+    export_url = f"https://docs.google.com/spreadsheets/d/{src_id}/export?format=csv&gid={gid}"
+    token   = creds.get_access_token().access_token
+    resp    = requests.get(export_url, headers={"Authorization": f"Bearer {token}"})
+    resp.raise_for_status()
+    logging.info(f"→ CSV экспорт получен: {len(resp.content)} байт")
 
-    # 3) Превращаем в DataFrame и выбираем столбцы A,B,C,E,V
-    header = all_vals[0]
-    data   = all_vals[1:]
-    df     = pd.DataFrame(data, columns=header)
-    # номера столбцов: A→0, B→1, C→2, E→4, V→21
-    cols   = [header[i] for i in (0,1,2,4,21)]
-    df     = df[cols]
-    logging.info(f"→ Выбрали колонки: {cols}")
+    df = pd.read_csv(io.StringIO(resp.text))
+    df = df.iloc[:, [0,1,2,4,21]]  # A,B,C,E,V
+    logging.info(f"→ Оставили колонки A,B,C,E,V — всего {len(df)} строк")
 
-    # 4) Записываем в целевую таблицу
+    # 3) Запись в целевую таблицу
     dst_id    = os.environ["DEST_SS_ID"]
-    dst_sheet = os.environ.get("DEST_SHEET", "Tutors")
+    dst_sheet = os.environ["DEST_SHEET"]
     sh_dst    = client.open_by_key(dst_id)
     ws_dst    = sh_dst.worksheet(dst_sheet)
-    ws_dst.clear()  # очищаем прежние данные
+    ws_dst.clear()
     set_with_dataframe(ws_dst, df)
-    logging.info(f"✔ Перенесли данные в лист '{dst_sheet}' (ID={dst_id}) — строк: {len(df)}")
+    logging.info(f"✔ Записали в {dst_sheet} (ID={dst_id}) {len(df)} строк")
 
 if __name__ == "__main__":
     main()
