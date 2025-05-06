@@ -3,7 +3,7 @@ name: Update Google Sheet
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 3 * * *"   # запускаем каждый день в 03:00 UTC
+    - cron: "0 3 * * *"   # каждый день в 03:00 UTC
 
 jobs:
   push-to-sheet:
@@ -23,8 +23,7 @@ jobs:
             gspread \
             oauth2client \
             gspread-dataframe \
-            pandas \
-            requests
+            pandas
 
       - name: Run update script
         env:
