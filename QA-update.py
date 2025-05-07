@@ -20,7 +20,7 @@ DEST_SHEET_NAME     = "QA - Lesson evaluation"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-def fetch_with_retries(ws, max_attempts=5, initial_backoff=1.0):
+def fetch_with_retries(ws, max_attempts=8, initial_backoff=1.0):
     """
     Пытаемся ws.get_all_values(), при любых 5xx — ждем и повторяем.
     """
