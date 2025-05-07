@@ -22,7 +22,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 
 def fetch_with_retries(ws, max_attempts=8, initial_backoff=1.0):
     """
-    Пытаемся ws.get_all_values(), при любых 5xx — ждем и повторяем.
+    Читает весь лист через get_all_values() с retry при ошибках 5xx.
     """
     backoff = initial_backoff
     for attempt in range(1, max_attempts + 1):
@@ -30,23 +30,39 @@ def fetch_with_retries(ws, max_attempts=8, initial_backoff=1.0):
             logging.info(f"Попытка #{attempt} чтения листа…")
             return ws.get_all_values()
         except APIError as e:
-            # пытаемся вытащить HTTP-код (в зависимости от версии gspread)
+            # пытаемся вытащить HTTP-код
             code = None
             try:
                 code = e.response.status_code
             except Exception:
-                # может быть в .response.status
                 code = getattr(e.response, "status", None)
-            # если это server error (5xx) — retry
             if code and 500 <= int(code) < 600 and attempt < max_attempts:
                 logging.warning(f"Получили {code}, ждем {backoff:.1f}s и повторяем…")
                 time.sleep(backoff)
                 backoff *= 2
                 continue
-            # иначе — всё, выходим с ошибкой
             logging.error(f"Ошибка при чтении листа (код={code}): {e}")
             raise
     raise RuntimeError("Не удалось получить данные после нескольких попыток")
+
+def api_retry(func, *args, max_attempts=5, initial_backoff=1.0, **kwargs):
+    """
+    Общий retry для любых API-вызовов, ловим APIError 503.
+    """
+    backoff = initial_backoff
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return func(*args, **kwargs)
+        except APIError as e:
+            code = getattr(e, "response", None) and getattr(e.response, "status_code", None)
+            if code == 503 and attempt < max_attempts:
+                logging.warning(f"API 503 на попытке {attempt}, retry через {backoff}s…")
+                time.sleep(backoff)
+                backoff *= 2
+                continue
+            logging.error(f"APIError на попытке {attempt}: {e}")
+            raise
+    raise RuntimeError("API вызовы завершились неудачно после retries")
 
 def main():
     # 1) Авторизация
@@ -56,7 +72,7 @@ def main():
     client  = gspread.authorize(creds)
     logging.info("✔ Авторизованы в Google Sheets")
 
-    # 2) Открываем исходный лист и читаем данные с retry
+    # 2) Считываем исходный лист с retry
     sh_src   = client.open_by_key(SOURCE_SS_ID)
     ws_src   = sh_src.worksheet(SOURCE_SHEET_NAME)
     all_vals = fetch_with_retries(ws_src)
@@ -65,19 +81,18 @@ def main():
         logging.error("Исходный лист пуст или нет данных")
         return
 
-    # 3) Собираем DataFrame и выбираем колонки C, D, O, M, F
+    # 3) Формируем DataFrame и выбираем колонки C, D, O, M, F
     df_src = pd.DataFrame(all_vals[1:], columns=all_vals[0])
     df      = df_src.iloc[:, [2, 3, 14, 12, 5]]
     logging.info(f"→ Оставили колонки C,D,O,M,F: {df.shape[0]} строк")
 
-    # 4) Записываем в целевой лист — очищаем A:E и вставляем df туда
+    # 4) Записываем в целевой лист — очищаем A:E и вставляем df туда с retry
     sh_dst = client.open_by_key(DEST_SS_ID)
     ws_dst = sh_dst.worksheet(DEST_SHEET_NAME)
 
-    # очищаем только первые пять столбцов
-    ws_dst.batch_clear(["A:E"])
-    # вставляем наш df (5 колонок) начиная с ячейки A1
-    set_with_dataframe(
+    api_retry(ws_dst.batch_clear, ["A:E"])
+    api_retry(
+        set_with_dataframe,
         ws_dst,
         df,
         row=1,
