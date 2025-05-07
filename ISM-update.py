@@ -29,12 +29,12 @@ SERVICE_ACCOUNT_JSON = json.loads(os.environ["GCP_SERVICE_ACCOUNT"])
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-def fetch_csv_with_retries(url: str, max_attempts: int = 5, backoff_sec: float = 1.0) -> bytes:
+def fetch_csv_with_retries(url: str, max_attempts: int = 8, backoff_sec: float = 1.0) -> bytes:
     delay = backoff_sec
     for attempt in range(1, max_attempts+1):
         try:
             logging.info(f"CSV fetch attempt {attempt}")
-            r = requests.get(url, timeout=30)
+            r = requests.get(url, timeout=(10,120))
             if r.status_code >= 500:
                 raise RequestException(f"{r.status_code} Server Error")
             r.raise_for_status()
