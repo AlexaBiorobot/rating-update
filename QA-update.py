@@ -9,6 +9,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from gspread_dataframe import set_with_dataframe
 from gspread.exceptions import APIError
+from googleapiclient.errors import HttpError
 
 # —————————————————————————————
 # Ваши константы
@@ -20,6 +21,21 @@ DEST_SHEET_NAME     = "QA - Lesson evaluation"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
+def get_http_code(exc):
+    """
+    Универсально извлекает HTTP-код из APIError или HttpError.
+    """
+    # gspread.exceptions.APIError
+    if hasattr(exc, "response") and hasattr(exc.response, "status_code"):
+        return exc.response.status_code
+    # googleapiclient.errors.HttpError
+    if hasattr(exc, "status"):
+        return exc.status
+    if hasattr(exc, "resp") and hasattr(exc.resp, "status"):
+        return exc.resp.status
+    return None
+
+
 def fetch_with_retries(ws, max_attempts=8, initial_backoff=1.0):
     """
     Читает весь лист через get_all_values() с retry при ошибках 5xx.
@@ -29,13 +45,8 @@ def fetch_with_retries(ws, max_attempts=8, initial_backoff=1.0):
         try:
             logging.info(f"Попытка #{attempt} чтения листа…")
             return ws.get_all_values()
-        except APIError as e:
-            # пытаемся вытащить HTTP-код
-            code = None
-            try:
-                code = e.response.status_code
-            except Exception:
-                code = getattr(e.response, "status", None)
+        except (APIError, HttpError) as e:
+            code = get_http_code(e)
             if code and 500 <= int(code) < 600 and attempt < max_attempts:
                 logging.warning(f"Получили {code}, ждем {backoff:.1f}s и повторяем…")
                 time.sleep(backoff)
@@ -45,28 +56,33 @@ def fetch_with_retries(ws, max_attempts=8, initial_backoff=1.0):
             raise
     raise RuntimeError("Не удалось получить данные после нескольких попыток")
 
+
 def api_retry(func, *args, max_attempts=5, initial_backoff=1.0, **kwargs):
     """
-    Общий retry для любых API-вызовов, ловим APIError 503.
+    Общий retry для любых API-вызовов, ловим ошибки 5xx.
     """
     backoff = initial_backoff
     for attempt in range(1, max_attempts + 1):
         try:
             return func(*args, **kwargs)
-        except APIError as e:
-            code = getattr(e, "response", None) and getattr(e.response, "status_code", None)
+        except (APIError, HttpError) as e:
+            code = get_http_code(e)
             if code and 500 <= int(code) < 600 and attempt < max_attempts:
-                logging.warning(f"API 503 на попытке {attempt}, retry через {backoff}s…")
+                logging.warning(f"API {code} на попытке {attempt}, retry через {backoff}s…")
                 time.sleep(backoff)
                 backoff *= 2
                 continue
-            logging.error(f"APIError на попытке {attempt}: {e}")
+            logging.error(f"APIError на попытке {attempt} (код={code}): {e}")
             raise
     raise RuntimeError("API вызовы завершились неудачно после retries")
 
+
 def main():
     # 1) Авторизация
-    scope   = ["https://spreadsheets.google.com/feeds","https://www.googleapis.com/auth/drive"]
+    scope   = [
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/drive"
+    ]
     sa_info = json.loads(os.environ["GCP_SERVICE_ACCOUNT"])
     creds   = ServiceAccountCredentials.from_json_keyfile_dict(sa_info, scope)
     client  = gspread.authorize(creds)
@@ -101,6 +117,7 @@ def main():
         include_column_header=True
     )
     logging.info(f"✔ Данные записаны в «{DEST_SHEET_NAME}» — {df.shape[0]} строк")
+
 
 if __name__ == "__main__":
     main()
