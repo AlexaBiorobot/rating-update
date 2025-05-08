@@ -55,7 +55,7 @@ def api_retry(func, *args, max_attempts=5, initial_backoff=1.0, **kwargs):
             return func(*args, **kwargs)
         except APIError as e:
             code = getattr(e, "response", None) and getattr(e.response, "status_code", None)
-            if code == 503 and attempt < max_attempts:
+            if code and 500 <= int(code) < 600 and attempt < max_attempts:
                 logging.warning(f"API 503 на попытке {attempt}, retry через {backoff}s…")
                 time.sleep(backoff)
                 backoff *= 2
