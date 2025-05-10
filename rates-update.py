@@ -3,12 +3,15 @@ import os
 import json
 import logging
 import time
+import io
 
 import pandas as pd
+import requests
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from gspread_dataframe import set_with_dataframe
 from gspread.exceptions import APIError, WorksheetNotFound
+from requests.exceptions import RequestException
 
 # —————————————————————————————
 # Ваши константы
@@ -21,8 +24,7 @@ DEST_SHEET_NAME   = "rates"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-
-def api_retry_open(client, key, max_attempts=5, backoff=1.0):
+def api_retry_open(client, key, max_attempts=8, backoff=1.0):
     for attempt in range(1, max_attempts + 1):
         try:
             logging.info(f"open_by_key attempt {attempt}/{max_attempts}")
@@ -35,7 +37,6 @@ def api_retry_open(client, key, max_attempts=5, backoff=1.0):
                 backoff *= 2
                 continue
             raise
-
 
 def api_retry_worksheet(sh, title, max_attempts=5, backoff=1.0):
     for attempt in range(1, max_attempts + 1):
@@ -54,27 +55,23 @@ def api_retry_worksheet(sh, title, max_attempts=5, backoff=1.0):
             logging.error(f"Worksheet '{title}' not found")
             raise
 
-
-def fetch_with_retries(ws, max_attempts=5, initial_backoff=1.0):
-    """Пытаемся ws.get_all_values(), при любых 5xx – ждем и повторяем."""
-    backoff = initial_backoff
+def fetch_csv_with_retries(url: str, max_attempts: int = 8, backoff_sec: float = 1.0) -> bytes:
+    delay = backoff_sec
     for attempt in range(1, max_attempts + 1):
         try:
-            logging.info(f"get_all_values() attempt {attempt}/{max_attempts}")
-            return ws.get_all_values()
-        except APIError as e:
-            code = None
-            if hasattr(e, "response") and e.response:
-                code = getattr(e.response, "status_code", None) or getattr(e.response, "status", None)
-            if code and 500 <= int(code) < 600 and attempt < max_attempts:
-                logging.warning(f"Received {code} — retrying get_all_values in {backoff}s")
-                time.sleep(backoff)
-                backoff *= 2
-                continue
-            logging.error(f"Error fetching values (code={code}): {e}")
-            raise
-    raise RuntimeError("Failed to fetch data after retries")
-
+            logging.info(f"CSV fetch attempt {attempt}/{max_attempts}")
+            r = requests.get(url, timeout=(10, 120))
+            if r.status_code >= 500:
+                raise RequestException(f"{r.status_code} Server Error")
+            r.raise_for_status()
+            return r.content
+        except Exception as e:
+            if attempt == max_attempts:
+                logging.error(f"Failed to fetch CSV after {max_attempts} attempts: {e}")
+                raise
+            logging.warning(f"Error fetching CSV ({e}), retrying in {delay}s…")
+            time.sleep(delay)
+            delay *= 2
 
 def main():
     # 1) Авторизация
@@ -84,29 +81,36 @@ def main():
     client  = gspread.authorize(creds)
     logging.info("✔ Authenticated to Google Sheets")
 
-    # 2) Чтение исходного листа с retry
-    sh_src   = api_retry_open(client, SOURCE_SS_ID)
-    ws_src   = api_retry_worksheet(sh_src, SOURCE_SHEET_NAME)
-    all_vals = fetch_with_retries(ws_src)
+    # 2) Находим лист и его GID
+    sh_src = api_retry_open(client, SOURCE_SS_ID)
+    ws_src = api_retry_worksheet(sh_src, SOURCE_SHEET_NAME)
+    sheet_gid = ws_src.id
+    logging.info(f"→ Found sheet '{SOURCE_SHEET_NAME}' with GID={sheet_gid}")
 
-    if not all_vals or len(all_vals) < 2:
-        logging.error("Source sheet empty or no data")
-        return
+    # 3) Строим URL для CSV-экспорта и качаем
+    token     = creds.get_access_token().access_token
+    export_url = (
+        f"https://docs.google.com/spreadsheets/d/{SOURCE_SS_ID}/export"
+        f"?format=csv&gid={sheet_gid}&access_token={token}"
+    )
+    logging.info(f"→ Export URL: {export_url[:80]}…")
+    csv_bytes = fetch_csv_with_retries(export_url)
+    logging.info(f"→ Retrieved {len(csv_bytes)} bytes")
 
-    # 3) Формируем DataFrame и выбираем нужные колонки
-    df_src = pd.DataFrame(all_vals[1:], columns=all_vals[0])
-    # здесь [0,1,22,23,24,18] соответствуют A,B,C,V,E и ещё одной
-    df      = df_src.iloc[:, [0, 1, 22, 23, 24, 18]]
-    logging.info(f"→ Kept columns [0,1,22,23,24,18]: {df.shape[0]} rows")
+    # 4) Парсим в DataFrame и выбираем колонки
+    text = csv_bytes.decode("utf-8")
+    df_all = pd.read_csv(io.StringIO(text), encoding="utf-8")
+    logging.info(f"→ Parsed DataFrame shape={df_all.shape}")
 
-    # 4) Запись в целевой лист с retry
+    df = df_all.iloc[:, [0, 1, 22, 23, 24, 18]]
+    logging.info(f"→ Selected columns [0,1,22,23,24,18] → shape={df.shape}")
+
+    # 5) Пишем в целевой лист с retry
     sh_dst = api_retry_open(client, DEST_SS_ID)
     ws_dst = api_retry_worksheet(sh_dst, DEST_SHEET_NAME)
-
     ws_dst.clear()
     set_with_dataframe(ws_dst, df)
     logging.info(f"✔ Written to '{DEST_SHEET_NAME}' — {df.shape[0]} rows")
-
 
 if __name__ == "__main__":
     main()
