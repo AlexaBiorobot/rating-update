@@ -160,9 +160,9 @@ def main():
         logging.info(f"→ После fallback-выборки shape={df.shape}")
 
         # === ДОБАВЬ ЭТУ ПРОВЕРКУ ПЕРЕД ОЧИСТКОЙ ЛИСТА ===
-    if df is None or df.empty:
-        logging.error("❌ Не удалось получить новые данные. Старая таблица останется без изменений.")
-        return  # Просто выходим, ничего не трогаем
+if df is None or df.empty:
+    logging.error("❌ Не удалось получить новые данные. Старая таблица останется без изменений.")
+    return  # Просто выходим, ничего не трогаем
 
     # 5) Запись в целевой лист
     sh_dst = api_retry_open(client, DEST_SS_ID)
