@@ -2,8 +2,8 @@ name: Update QA
 
 on:
   workflow_dispatch:      # позволяет запустить вручную из UI
-  schedule:
-    - cron: "0 */4 * * *"  # автоматически каждые 4 часа
+  #schedule:
+  #  - cron: "0 */4 * * *"  # автоматически каждые 4 часа
 
 jobs:
   update-custom:
