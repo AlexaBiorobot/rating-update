@@ -2,8 +2,8 @@ name: Update Students_in_groups
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 */4 * * *"  # каждые 4 часа
+  #schedule:
+  #  - cron: "0 */4 * * *"  # каждые 4 часа
 
 jobs:
   update-filtered:
