@@ -159,10 +159,10 @@ def main():
         df = df_all.iloc[:, cols_to_take]
         logging.info(f"→ После fallback-выборки shape={df.shape}")
 
-            # === ДОБАВЬ ЭТУ ПРОВЕРКУ ПЕРЕД ОЧИСТКОЙ ЛИСТА ===
+    # === ПРОВЕРЯЕМ: есть ли новые данные ===
     if df is None or df.empty:
         logging.error("❌ Не удалось получить новые данные. Старая таблица останется без изменений.")
-        return  # Просто выходим, ничего не трогаем
+        return  # выходим до batch_clear, ничего не трогаем
 
     # 5) Запись в целевой лист
     sh_dst = api_retry_open(client, DEST_SS_ID)
