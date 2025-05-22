@@ -2,8 +2,8 @@ name: Update Groups sheet
 
 on:
   workflow_dispatch:      # ручной запуск
-  schedule:
-    - cron: "0 */4 * * *"
+  #schedule:
+   # - cron: "0 */4 * * *"
 
 jobs:
   update-tutors:
