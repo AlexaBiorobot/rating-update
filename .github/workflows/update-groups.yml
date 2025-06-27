@@ -25,7 +25,7 @@ jobs:
         env:
           GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
         run: |
-          python update_groups.py
+          python update_groups_NEW.py
 
       - name: Log completion
         run: echo "✅ Group sheet updated successfully"
