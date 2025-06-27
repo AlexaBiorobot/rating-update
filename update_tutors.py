@@ -105,7 +105,7 @@ def main():
     # 4) Запись в целевой лист
     sh_dst = api_retry_open(client, DEST_SS_ID)
     ws_dst = api_retry_worksheet(sh_dst, DEST_SHEET_NAME)
-    ws_dst.batch_clear(["A:D"])
+    ws_dst.batch_clear(["A:G"])
     set_with_dataframe(ws_dst, df)
     logging.info(f"✔ Written to '{DEST_SHEET_NAME}' — {df.shape[0]} rows")
 
