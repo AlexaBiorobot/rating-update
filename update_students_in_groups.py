@@ -64,7 +64,7 @@ def main():
     # 4) Пишем в целевой лист
     sh_dst = client.open_by_key(DST_SS_ID)
     ws_dst = sh_dst.worksheet(DST_SHEET_TITLE)
-    ws_dst.clear()
+    ws_dst.batch_clear(['A:D'])
     set_with_dataframe(ws_dst, df)
     logging.info(f"✔ Записано в '{DST_SHEET_TITLE}': {len(df)} строк")
 
