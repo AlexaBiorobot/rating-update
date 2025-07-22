@@ -146,6 +146,20 @@ def get_selected_columns_from_sheet(client, ss_id, sheet_name, cols_to_take):
         logging.info(f"→ После fallback-выборки shape={df.shape}")
     return df
 
+def get_selected_columns_from_sheet(...):
+    # твоя функция
+
+def get_full_sheet_as_dataframe(client, ss_id, sheet_name):
+    sh = api_retry_open(client, ss_id)
+    ws = api_retry_worksheet(sh, sheet_name)
+    all_vals = fetch_all_values_with_retries(ws)
+    if not all_vals or len(all_vals) < 2:
+        logging.error(f"Нет данных в листе {sheet_name}")
+        return None
+    df = pd.DataFrame(all_vals[1:], columns=all_vals[0])
+    logging.info(f"→ Получен полный лист {sheet_name}, shape={df.shape}")
+    return df
+
 def main():
     # 1) Авторизация
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -187,12 +201,22 @@ def main():
     # 6) Параллельная запись во второй файл/лист
     DEST2_SS_ID = "1yJmskKLGinBNKIV3ewXsVEfnh-JRj_FhuKyElL93vM4"
     DEST2_SHEET_NAME = "data"
-    sh_dst2 = api_retry_open(client, DEST2_SS_ID)
-    ws_dst2 = api_retry_worksheet(sh_dst2, DEST2_SHEET_NAME)
-    ws_dst2.batch_clear(["A:E"])
-    set_with_dataframe(ws_dst2, df, row=1, col=1,
-                       include_index=False, include_column_header=True)
-    logging.info(f"✔ Данные также записаны в «{DEST2_SHEET_NAME}» — {df.shape[0]} строк")
+
+    full_df1 = get_full_sheet_as_dataframe(client, SOURCE_SS_ID, SOURCE_SHEET_NAME)
+    full_df2 = get_full_sheet_as_dataframe(client, SOURCE2_SS_ID, SOURCE2_SHEET_NAME)
+
+    # Если хотя бы один из датафреймов не пустой
+    dfs_full = [df for df in [full_df1, full_df2] if df is not None and not df.empty]
+    if dfs_full:
+        full_df = pd.concat(dfs_full, ignore_index=True)
+        sh_dst2 = api_retry_open(client, DEST2_SS_ID)
+        ws_dst2 = api_retry_worksheet(sh_dst2, DEST2_SHEET_NAME)
+        ws_dst2.clear()
+        set_with_dataframe(ws_dst2, full_df, row=1, col=1,
+                           include_index=False, include_column_header=True)
+        logging.info(f"✔ Данные (полные листы) записаны в «{DEST2_SHEET_NAME}» — {full_df.shape[0]} строк")
+    else:
+        logging.warning("Нет данных для записи полного листа во второй файл.")
 
 
 if __name__ == "__main__":
