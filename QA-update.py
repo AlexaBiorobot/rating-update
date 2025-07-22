@@ -115,6 +115,36 @@ def fetch_columns(ws, cols_idx, max_attempts=3, backoff=1.0):
             logging.error(f"batch_get failed after {i} attempts: {e}")
             raise
 
+def get_selected_columns_from_sheet(client, ss_id, sheet_name, cols_to_take):
+    sh = api_retry_open(client, ss_id)
+    ws = api_retry_worksheet(sh, sheet_name)
+    try:
+        df = fetch_columns(ws, cols_to_take)
+        logging.info(f"→ batch_get succeeded for {sheet_name}, shape={df.shape}")
+    except APIError:
+        logging.warning("batch_get не прошел, пробуем CSV-экспорт…")
+        gid = ws.id
+        creds = client.auth
+        token = creds.get_access_token().access_token
+        export_url = (
+            f"https://docs.google.com/spreadsheets/d/{ss_id}/export"
+            f"?format=csv&gid={gid}&access_token={token}"
+        )
+        try:
+            csv_bytes = fetch_csv_with_retries(export_url)
+            df_all = pd.read_csv(io.StringIO(csv_bytes.decode("utf-8")))
+            logging.info(f"→ CSV-экспорт удался, shape={df_all.shape}")
+        except Exception as e:
+            logging.warning(f"CSV-экспорт упал ({e}), пробуем get_all_values()…")
+            all_vals = fetch_all_values_with_retries(ws)
+            if not all_vals or len(all_vals) < 2:
+                logging.error("Нет данных ни одним способом – выхожу.")
+                return None
+            df_all = pd.DataFrame(all_vals[1:], columns=all_vals[0])
+            logging.info(f"→ get_all_values() удался, shape={df_all.shape}")
+        df = df_all.iloc[:, cols_to_take]
+        logging.info(f"→ После fallback-выборки shape={df.shape}")
+    return df
 
 def main():
     # 1) Авторизация
@@ -124,45 +154,27 @@ def main():
     client = gspread.authorize(creds)
     logging.info("✔ Авторизованы в Google Sheets")
 
-    # 2) Открываем исходный лист
-    sh_src = api_retry_open(client, SOURCE_SS_ID)
-    ws_src = api_retry_worksheet(sh_src, SOURCE_SHEET_NAME)
+    # 2) Тянем данные из первого источника
+    cols_to_take_1 = [2, 3, 14, 12, 5]  # C, D, O, M, F
+    df1 = get_selected_columns_from_sheet(client, SOURCE_SS_ID, SOURCE_SHEET_NAME, cols_to_take_1)
 
-    # 3) Пробуем batch_get по колонкам C,D,O,M,F (2,3,14,12,5)
-    cols_to_take = [2, 3, 14, 12, 5]
-    try:
-        df = fetch_columns(ws_src, cols_to_take)
-        logging.info(f"→ batch_get succeeded, shape={df.shape}")
-    except APIError:
-        # 4a) fallback: CSV-экспорт
-        logging.warning("batch_get не прошел, пробуем CSV-экспорт…")
-        gid = ws_src.id
-        token = creds.get_access_token().access_token
-        export_url = (
-            f"https://docs.google.com/spreadsheets/d/{SOURCE_SS_ID}/export"
-            f"?format=csv&gid={gid}&access_token={token}"
-        )
-        try:
-            csv_bytes = fetch_csv_with_retries(export_url)
-            df_all = pd.read_csv(io.StringIO(csv_bytes.decode("utf-8")))
-            logging.info(f"→ CSV-экспорт удался, shape={df_all.shape}")
-        except Exception as e:
-            # 4b) последняя надежда: get_all_values()
-            logging.warning(f"CSV-экспорт упал ({e}), пробуем get_all_values()…")
-            all_vals = fetch_all_values_with_retries(ws_src)
-            if not all_vals or len(all_vals) < 2:
-                logging.error("Нет данных ни одним способом – выхожу.")
-                return
-            df_all = pd.DataFrame(all_vals[1:], columns=all_vals[0])
-            logging.info(f"→ get_all_values() удался, shape={df_all.shape}")
-        # отбираем нужные колонки из df_all
-        df = df_all.iloc[:, cols_to_take]
-        logging.info(f"→ После fallback-выборки shape={df.shape}")
+    # 3) Тянем данные из второго источника
+    SOURCE2_SS_ID      = "1R8GzRVL58XxheG0FRtSRfE6Ib5E_GcZh1Ws_iaDOpbk"
+    SOURCE2_SHEET_NAME = "QA Workspace Archive"
+    cols_to_take_2 = [0, 1, 12, 10, 3]  # A, B, M, K, D
+    df2 = get_selected_columns_from_sheet(client, SOURCE2_SS_ID, SOURCE2_SHEET_NAME, cols_to_take_2)
 
-    # === ПРОВЕРЯЕМ: есть ли новые данные ===
-    if df is None or df.empty:
-        logging.error("❌ Не удалось получить новые данные. Старая таблица останется без изменений.")
-        return  # выходим до batch_clear, ничего не трогаем
+    # 4) Объединяем
+    if df1 is None and df2 is None:
+        logging.error("❌ Не удалось получить новые данные ни из одного источника. Старая таблица останется без изменений.")
+        return
+
+    dfs = [df for df in [df1, df2] if df is not None and not df.empty]
+    if not dfs:
+        logging.error("❌ Нет данных для записи.")
+        return
+
+    df = pd.concat(dfs, ignore_index=True)
 
     # 5) Запись в целевой лист
     sh_dst = api_retry_open(client, DEST_SS_ID)
