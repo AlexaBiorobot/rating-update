@@ -146,8 +146,36 @@ def get_selected_columns_from_sheet(client, ss_id, sheet_name, cols_to_take):
         logging.info(f"→ После fallback-выборки shape={df.shape}")
     return df
 
-def get_selected_columns_from_sheet(...):
-    # твоя функция
+def get_selected_columns_from_sheet(client, ss_id, sheet_name, cols_to_take):
+    sh = api_retry_open(client, ss_id)
+    ws = api_retry_worksheet(sh, sheet_name)
+    try:
+        df = fetch_columns(ws, cols_to_take)
+        logging.info(f"→ batch_get succeeded for {sheet_name}, shape={df.shape}")
+    except APIError:
+        logging.warning("batch_get не прошел, пробуем CSV-экспорт…")
+        gid = ws.id
+        creds = client.auth
+        token = creds.get_access_token().access_token
+        export_url = (
+            f"https://docs.google.com/spreadsheets/d/{ss_id}/export"
+            f"?format=csv&gid={gid}&access_token={token}"
+        )
+        try:
+            csv_bytes = fetch_csv_with_retries(export_url)
+            df_all = pd.read_csv(io.StringIO(csv_bytes.decode("utf-8")))
+            logging.info(f"→ CSV-экспорт удался, shape={df_all.shape}")
+        except Exception as e:
+            logging.warning(f"CSV-экспорт упал ({e}), пробуем get_all_values()…")
+            all_vals = fetch_all_values_with_retries(ws)
+            if not all_vals or len(all_vals) < 2:
+                logging.error("Нет данных ни одним способом – выхожу.")
+                return None
+            df_all = pd.DataFrame(all_vals[1:], columns=all_vals[0])
+            logging.info(f"→ get_all_values() удался, shape={df_all.shape}")
+        df = df_all.iloc[:, cols_to_take]
+        logging.info(f"→ После fallback-выборки shape={df.shape}")
+    return df
 
 def get_full_sheet_as_dataframe(client, ss_id, sheet_name):
     sh = api_retry_open(client, ss_id)
