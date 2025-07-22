@@ -176,13 +176,23 @@ def main():
 
     df = pd.concat(dfs, ignore_index=True)
 
-    # 5) Запись в целевой лист
+    # 5) Запись в целевой лист (первый)
     sh_dst = api_retry_open(client, DEST_SS_ID)
     ws_dst = api_retry_worksheet(sh_dst, DEST_SHEET_NAME)
     ws_dst.batch_clear(["A:E"])
     set_with_dataframe(ws_dst, df, row=1, col=1,
                        include_index=False, include_column_header=True)
     logging.info(f"✔ Данные записаны в «{DEST_SHEET_NAME}» — {df.shape[0]} строк")
+
+    # 6) Параллельная запись во второй файл/лист
+    DEST2_SS_ID = "1yJmskKLGinBNKIV3ewXsVEfnh-JRj_FhuKyElL93vM4"
+    DEST2_SHEET_NAME = "data"
+    sh_dst2 = api_retry_open(client, DEST2_SS_ID)
+    ws_dst2 = api_retry_worksheet(sh_dst2, DEST2_SHEET_NAME)
+    ws_dst2.batch_clear(["A:E"])
+    set_with_dataframe(ws_dst2, df, row=1, col=1,
+                       include_index=False, include_column_header=True)
+    logging.info(f"✔ Данные также записаны в «{DEST2_SHEET_NAME}» — {df.shape[0]} строк")
 
 
 if __name__ == "__main__":
