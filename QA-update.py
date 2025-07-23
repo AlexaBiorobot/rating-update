@@ -165,9 +165,9 @@ def main():
     df2 = get_selected_columns_from_sheet(client, SOURCE2_SS_ID, SOURCE2_SHEET_NAME, cols_to_take_2)
 
     # 3a) Тянем данные из третьего источника (новый лист!)
-    SOURCE3_SS_ID = SOURCE2_SS_ID  # тот же файл
+    SOURCE3_SS_ID      = "1R8GzRVL58XxheG0FRtSRfE6Ib5E_GcZh1Ws_iaDOpbk"
     SOURCE3_SHEET_NAME = "QA Workspace Graduation Archive"
-    cols_to_take_3 = cols_to_take_2  # те же колонки
+    cols_to_take_3 = [0, 1, 12, 11, 3]  # A, B, M, L, D
     df3 = get_selected_columns_from_sheet(client, SOURCE3_SS_ID, SOURCE3_SHEET_NAME, cols_to_take_3)
 
     # 4) Объединяем
