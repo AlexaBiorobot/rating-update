@@ -170,12 +170,6 @@ def main():
     cols_to_take_3 = [0, 1, 12, 11, 3]  # A, B, M, L, D
     df3 = get_selected_columns_from_sheet(client, SOURCE3_SS_ID, SOURCE3_SHEET_NAME, cols_to_take_3)
 
-    common_columns = ['A', 'B', 'M', 'K_or_L', 'D']
-    if df2 is not None:
-        df2.columns = common_columns
-    if df3 is not None:
-        df3.columns = common_columns
-
     # 4) Объединяем
     if all(x is None for x in [df1, df2, df3]):
         logging.error("❌ Не удалось получить новые данные ни из одного источника. Старая таблица останется без изменений.")
@@ -192,7 +186,7 @@ def main():
     sh_dst = api_retry_open(client, DEST_SS_ID)
     ws_dst = api_retry_worksheet(sh_dst, DEST_SHEET_NAME)
     ws_dst.batch_clear(["A2:E"])
-    set_with_dataframe(ws_dst, df, row=2, col=1, include_index=False, include_column_header=True)
+    set_with_dataframe(ws_dst, df, row=2, col=1, include_index=False, include_column_header=False)
     logging.info(f"✔ Данные записаны в «{DEST_SHEET_NAME}» — {df.shape[0]} строк")
 
 
