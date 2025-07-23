@@ -170,6 +170,13 @@ def main():
     cols_to_take_3 = [0, 1, 12, 11, 3]  # A, B, M, L, D
     df3 = get_selected_columns_from_sheet(client, SOURCE3_SS_ID, SOURCE3_SHEET_NAME, cols_to_take_3)
 
+    logging.info(f"Из '{SOURCE3_SHEET_NAME}' получено строк: {0 if df3 is None else df3.shape[0]}")
+    if df3 is not None:
+        logging.info(f"Колонки: {df3.columns.tolist()}")
+        logging.info(f"Первые 3 строки:\n{df3.head(3)}")
+    else:
+        logging.warning(f"Лист '{SOURCE3_SHEET_NAME}' не был загружен (None)")
+
     # 4) Объединяем
     if all(x is None for x in [df1, df2, df3]):
         logging.error("❌ Не удалось получить новые данные ни из одного источника. Старая таблица останется без изменений.")
