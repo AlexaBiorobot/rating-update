@@ -16,7 +16,7 @@ from requests.exceptions import RequestException, ReadTimeout
 
 # —————————————————————————————
 SOURCE_SS_ID      = "1gV9STzFPKMeIkVO6MFILzC-v2O6cO3XZyi4sSstgd8A"
-SOURCE_SHEET_NAME = "All lesson reviews"
+SOURCE_SHEET_NAME = "All lesson reviews OLD"
 DEST_SS_ID        = "16QrbLtzLTV6GqyT8HYwzcwYIsXewzjUbM0Jy5i1fENE"
 DEST_SHEET_NAME   = "QA - Lesson evaluation"
 # —————————————————————————————
