@@ -1,4 +1,4 @@
-name: Update Tutors
+name: Update IND (not for rating)
 
 on:
   workflow_dispatch:
