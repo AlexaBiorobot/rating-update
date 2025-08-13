@@ -98,7 +98,7 @@ def main():
     ws_src = api_retry_worksheet(sh_src, SOURCE_SHEET_NAME)
 
     # 3) Тянем только нужные колонки
-    cols_to_take = [0, 1, 10]  # A, B, K
+    cols_to_take = [0, 1, 10, 3]  # A, B, K, age
     df = fetch_columns(ws_src, cols_to_take)
     logging.info(f"→ Fetched columns {cols_to_take}, resulting shape={df.shape}")
 
