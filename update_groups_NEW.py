@@ -15,10 +15,6 @@ from gspread.utils import rowcol_to_a1
 SOURCE_SS_ID      = "1xqGCXsebSmYL4bqAwvTmD9lOentI45CTMxhea-ZDFls"
 SOURCE_SHEET_NAME = "Groups & Teachers"
 
-EXTRA_SHEET_NAME  = "Students & Teachers"   # добавлено
-# A,B,J => индексы 0,1,9
-EXTRA_COLS_IDX    = [0, 1, 9]
-
 DEST_SS_ID        = "16QrbLtzLTV6GqyT8HYwzcwYIsXewzjUbM0Jy5i1fENE"
 DEST_SHEET_NAME   = "Groups"
 # —————————————————————————————
@@ -62,41 +58,21 @@ def api_retry_worksheet(sh, title, max_attempts=5, backoff=1.0):
 def fetch_columns(ws, cols_idx, max_attempts=5, backoff=1.0):
     """
     Скачиваем только нужные колонки (0-based indices) через batch_get().
-    Нормализуем длину колонок (паддинг пустыми строками), чтобы не терять строки.
+    cols_idx — список индексов, напр. [0,1,2,21,4]
     """
     for attempt in range(1, max_attempts+1):
         try:
-            # строим диапазоны A1:A, B1:B, ...
+            # строим диапазоны A1:A, B1:B, C1:C, V1:V, E1:E
             ranges = []
             for idx in cols_idx:
                 a1 = rowcol_to_a1(1, idx+1)                # "A1", "B1", ...
                 col = ''.join(filter(str.isalpha, a1))     # "A", "B", ...
                 ranges.append(f"{col}1:{col}")
-
             batch = ws.batch_get(ranges)
-
-            # список колонок (каждая — список строк); гарантируем хотя бы header + одна пустая строка
-            cols = []
-            for col in batch:
-                if not col:
-                    cols.append(["", ""])  # header + одна пустая строка
-                else:
-                    cols.append([row[0] if row else "" for row in col])
-
+            # из batch получаем список колонок, каждая — список строк
+            cols = [[row[0] if row else "" for row in col] for col in batch]
             headers = [c[0] for c in cols]
-            # длина данных без заголовка
-            max_len = max(len(c) - 1 for c in cols) if cols else 0
-
-            # берём значения (без заголовка) и паддим до max_len
-            values = []
-            for c in cols:
-                body = c[1:]
-                if len(body) < max_len:
-                    body = body + [""] * (max_len - len(body))
-                values.append(body)
-
-            # транспонируем в строки
-            data = list(zip(*values)) if values else []
+            data    = list(zip(*(c[1:] for c in cols)))
             return pd.DataFrame(data, columns=headers)
         except Exception as e:
             if attempt < max_attempts:
@@ -112,38 +88,26 @@ def main():
     # 1) Авторизация
     scope   = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     creds   = ServiceAccountCredentials.from_json_keyfile_dict(
-        json.loads(os.environ["GCP_SERVICE_ACCOUNT"]), scope
-    )
+                  json.loads(os.environ["GCP_SERVICE_ACCOUNT"]), scope
+              )
     client  = gspread.authorize(creds)
     logging.info("✔ Authenticated to Google Sheets")
 
-    # 2) Открываем исходную таблицу
+    # 2) Открываем исходный лист
     sh_src = api_retry_open(client, SOURCE_SS_ID)
+    ws_src = api_retry_worksheet(sh_src, SOURCE_SHEET_NAME)
 
-    # 3) Лист "Groups & Teachers": тянем только нужные колонки
-    ws_src_main = api_retry_worksheet(sh_src, SOURCE_SHEET_NAME)
-    cols_main = [0, 1, 10, 3]  # A, B, K, D(возраст)
-    df_main = fetch_columns(ws_src_main, cols_main)
-    logging.info(f"→ Main fetched {SOURCE_SHEET_NAME} {cols_main}, shape={df_main.shape}")
+    # 3) Тянем только нужные колонки
+    cols_to_take = [0, 1, 10, 3]  # A, B, K, age
+    df = fetch_columns(ws_src, cols_to_take)
+    logging.info(f"→ Fetched columns {cols_to_take}, resulting shape={df.shape}")
 
-    # 4) Лист "Students & Teachers": A,B,J и добавляем справа
-    ws_src_extra = api_retry_worksheet(sh_src, EXTRA_SHEET_NAME)
-    df_extra = fetch_columns(ws_src_extra, EXTRA_COLS_IDX)
-    logging.info(f"→ Extra fetched {EXTRA_SHEET_NAME} {EXTRA_COLS_IDX}, shape={df_extra.shape}")
-
-    # Выравниваем по количеству строк (по индексу), недостающее -> ""
-    n = max(len(df_main), len(df_extra))
-    df_main  = df_main.reindex(range(n))
-    df_extra = df_extra.reindex(range(n))
-    df = pd.concat([df_main.fillna(""), df_extra.fillna("")], axis=1)
-    logging.info(f"→ Combined shape={df.shape}")
-
-    # 5) Запись в целевой лист
+    # 4) Запись в целевой лист
     sh_dst = api_retry_open(client, DEST_SS_ID)
     ws_dst = api_retry_worksheet(sh_dst, DEST_SHEET_NAME)
     ws_dst.clear()
     set_with_dataframe(ws_dst, df)
-    logging.info(f"✔ Written to '{DEST_SHEET_NAME}' — {df.shape[0]} rows, {df.shape[1]} columns")
+    logging.info(f"✔ Written to '{DEST_SHEET_NAME}' — {df.shape[0]} rows")
 
 
 if __name__ == "__main__":
