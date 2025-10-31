@@ -21,6 +21,12 @@ DEST_SS_ID        = "16QrbLtzLTV6GqyT8HYwzcwYIsXewzjUbM0Jy5i1fENE"
 DEST_SHEET_NAME   = "QA - Lesson evaluation"
 # —————————————————————————————
 
+# NEW — ключи дедупликации/приоритеты
+# None => дубликат = полное совпадение по всем колонкам
+DEDUPE_SUBSET = None
+DEDUPE_KEEP = "first"  # при конфликте оставляем первую
+SOURCE_PRIORITY = {"GRAD": 0, "ARCH": 1, "OLD": 2}  # GRAD > ARCH > OLD
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 
@@ -80,7 +86,7 @@ def fetch_all_values_with_retries(ws, max_attempts=5, backoff=1.0):
             return ws.get_all_values()
         except APIError as e:
             code = getattr(e.response, "status_code", None) or getattr(e.response, "status", None)
-            if code and 500 <= int(code) < 600 and i < max_attempts:
+            if code and 500 <= int(code) < 600 and i < max_attemptments:
                 logging.warning(f"get_all_values got {code}, retrying in {backoff:.1f}s")
                 time.sleep(backoff); backoff *= 2
                 continue
@@ -115,6 +121,7 @@ def fetch_columns(ws, cols_idx, max_attempts=3, backoff=1.0):
             logging.error(f"batch_get failed after {i} attempts: {e}")
             raise
 
+
 def get_selected_columns_from_sheet(client, ss_id, sheet_name, cols_to_take):
     sh = api_retry_open(client, ss_id)
     ws = api_retry_worksheet(sh, sheet_name)
@@ -146,6 +153,7 @@ def get_selected_columns_from_sheet(client, ss_id, sheet_name, cols_to_take):
         logging.info(f"→ После fallback-выборки shape={df.shape}")
     return df
 
+
 def main():
     # 1) Авторизация
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -170,29 +178,54 @@ def main():
     cols_to_take_3 = [0, 1, 12, 11, 3]  # A, B, M, L, D
     df3 = get_selected_columns_from_sheet(client, SOURCE3_SS_ID, SOURCE3_SHEET_NAME, cols_to_take_3)
 
-    # --- Задаём колонки для второго и третьего источника так, чтобы совпадали для concat ---
-    # Названия колонок указывай в том же порядке, что и для первого (df1)
-    # Узнай их через print(df1.columns), если не уверен!
+    # NEW — приводим названия колонок и помечаем источник (для приоритета при дедупе)
     TARGET_COLUMNS = list(df1.columns) if df1 is not None else ['Col1', 'Col2', 'Col3', 'Col4', 'Col5']
     if df2 is not None:
         df2.columns = TARGET_COLUMNS
     if df3 is not None:
         df3.columns = TARGET_COLUMNS
 
-    # 4) Объединяем
+    if df1 is not None:
+        df1["_src"] = "OLD"
+    if df2 is not None:
+        df2["_src"] = "ARCH"
+    if df3 is not None:
+        df3["_src"] = "GRAD"
+
+    # NEW — лёгкая нормализация строк (убираем лишние пробелы, чтобы не плодили псевдодубли)
+    for d in (df1, df2, df3):
+        if d is not None:
+            obj_cols = d.select_dtypes(include="object").columns
+            d[obj_cols] = d[obj_cols].apply(lambda s: s.str.strip())
+
+    # 4) Объединяем (как раньше, но с проверками)
     if all(x is None for x in [df1, df2, df3]):
         logging.error("❌ Не удалось получить новые данные ни из одного источника. Старая таблица останется без изменений.")
         return
 
-    dfs = [df for df in [df1, df2, df3] if df is not None and not df.empty]
+    dfs = [d for d in [df1, df2, df3] if d is not None and not d.empty]
     if not dfs:
         logging.error("❌ Нет данных для записи.")
         return
 
     df = pd.concat(dfs, ignore_index=True)
+
+    # NEW — сортируем по приоритету источника → при drop_duplicates останется «лучшая» версия
+    df["_prio"] = df["_src"].map(SOURCE_PRIORITY).fillna(9)
+    df = df.sort_values("_prio", kind="stable")
+
+    # NEW — дедупликация
+    subset = TARGET_COLUMNS if DEDUPE_SUBSET is None else DEDUPE_SUBSET
+    before = len(df)
+    df = df.drop_duplicates(subset=subset, keep=DEDUPE_KEEP, ignore_index=True)
+    after = len(df)
+    logging.info(f"✔ Дедупликация: {before} → {after} строк (ключ: {subset})")
+
+    # NEW — чистим служебные колонки и порядок столбцов
+    df = df.drop(columns=["_src", "_prio"], errors="ignore")
     df = df[TARGET_COLUMNS]
 
-    # 5) Запись в целевой лист (первый)
+    # 5) Запись в целевой лист (как было)
     sh_dst = api_retry_open(client, DEST_SS_ID)
     ws_dst = api_retry_worksheet(sh_dst, DEST_SHEET_NAME)
     ws_dst.batch_clear(["A2:E"])
