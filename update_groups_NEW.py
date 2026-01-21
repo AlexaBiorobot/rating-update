@@ -12,7 +12,7 @@ from gspread.exceptions import APIError, WorksheetNotFound
 from gspread.utils import rowcol_to_a1
 
 # —————————————————————————————
-SOURCE_SS_ID      = "1xqGCXsebSmYL4bqAwvTmD9lOentI45CTMxhea-ZDFls"
+SOURCE_SS_ID      = "1UIQWBvwGDWpUeCm1ob-ZonRDsju2e-sL1gB5oLAzSR8"
 SOURCE_SHEET_NAME = "Groups & Teachers"
 
 DEST_SS_ID        = "16QrbLtzLTV6GqyT8HYwzcwYIsXewzjUbM0Jy5i1fENE"
@@ -58,11 +58,11 @@ def api_retry_worksheet(sh, title, max_attempts=5, backoff=1.0):
 def fetch_columns(ws, cols_idx, max_attempts=5, backoff=1.0):
     """
     Скачиваем только нужные колонки (0-based indices) через batch_get().
-    cols_idx — список индексов, напр. [0,1,2,21,4]
+    cols_idx — список индексов, напр. [0, 1, 9, 3]
     """
     for attempt in range(1, max_attempts+1):
         try:
-            # строим диапазоны A1:A, B1:B, C1:C, V1:V, E1:E
+            # строим диапазоны A1:A, B1:B, C1:C, V1:V, E1:E To understand why we were pulling this data? (from Teachers n Groups)
             ranges = []
             for idx in cols_idx:
                 a1 = rowcol_to_a1(1, idx+1)                # "A1", "B1", ...
@@ -98,7 +98,7 @@ def main():
     ws_src = api_retry_worksheet(sh_src, SOURCE_SHEET_NAME)
 
     # 3) Тянем только нужные колонки
-    cols_to_take = [0, 1, 10, 3]  # A, B, K, age
+    cols_to_take = [0, 1, 9, 3]  # A, B, J, age
     df = fetch_columns(ws_src, cols_to_take)
     logging.info(f"→ Fetched columns {cols_to_take}, resulting shape={df.shape}")
 
