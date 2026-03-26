@@ -1,9 +1,9 @@
 name: Update ISM
 
 on:
-  workflow_dispatch:      # позволяет запустить вручную из UI
-  #schedule:
-  #  - cron: "0 */4 * * *"  # автоматически каждые 4 часа
+  workflow_dispatch:
+  # schedule:
+  #   - cron: "0 */4 * * *"
 
 jobs:
   update-custom:
@@ -11,16 +11,17 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v6
         with:
           python-version: "3.10"
+          cache: "pip"
 
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install \
             pandas \
             requests \
