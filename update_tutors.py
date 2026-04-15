@@ -10,6 +10,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 from gspread_dataframe import set_with_dataframe
 from gspread.exceptions import APIError, WorksheetNotFound
 from gspread.utils import rowcol_to_a1
+from itertools import zip_longest
 
 # —————————————————————————————
 SOURCE_SS_ID      = "1xqGCXsebSmYL4bqAwvTmD9lOentI45CTMxhea-ZDFls"
@@ -58,22 +59,36 @@ def api_retry_worksheet(sh, title, max_attempts=5, backoff=1.0):
 def fetch_columns(ws, cols_idx, max_attempts=5, backoff=1.0):
     """
     Скачиваем только нужные колонки (0-based indices) через batch_get().
-    cols_idx — список индексов, напр. [0,1,2,21,4]
     """
-    for attempt in range(1, max_attempts+1):
+    for attempt in range(1, max_attempts + 1):
         try:
-            # строим диапазоны A1:A, B1:B, C1:C, V1:V, E1:E
             ranges = []
             for idx in cols_idx:
-                a1 = rowcol_to_a1(1, idx+1)                # "A1", "B1", ...
-                col = ''.join(filter(str.isalpha, a1))     # "A", "B", ...
+                a1 = rowcol_to_a1(1, idx + 1)
+                col = ''.join(filter(str.isalpha, a1))
                 ranges.append(f"{col}1:{col}")
+
             batch = ws.batch_get(ranges)
-            # из batch получаем список колонок, каждая — список строк
+
             cols = [[row[0] if row else "" for row in col] for col in batch]
-            headers = [c[0] for c in cols]
-            data    = list(zip(*(c[1:] for c in cols)))
-            return pd.DataFrame(data, columns=headers)
+            logging.info(f"Column lengths incl header: {[len(c) for c in cols]}")
+
+            headers = []
+            value_cols = []
+
+            for i, c in enumerate(cols):
+                header = c[0] if c else f"col_{cols_idx[i] + 1}"
+                headers.append(header)
+                value_cols.append(c[1:] if len(c) > 1 else [])
+
+            data = list(zip_longest(*value_cols, fillvalue=""))
+            df = pd.DataFrame(data, columns=headers)
+
+            logging.info(f"Fetched dataframe shape: {df.shape}")
+            logging.info(f"Fetched dataframe head:\n{df.head(3).to_string(index=False)}")
+
+            return df
+
         except Exception as e:
             if attempt < max_attempts:
                 logging.warning(f"batch_get error (attempt {attempt}): {e} — retrying in {backoff:.1f}s")
@@ -103,6 +118,9 @@ def main():
     logging.info(f"→ Fetched columns {cols_to_take}, resulting shape={df.shape}")
 
     # 4) Запись в целевой лист
+    if df.empty:
+        raise RuntimeError("Source dataframe is empty. Aborting before clearing destination sheet.")
+    
     sh_dst = api_retry_open(client, DEST_SS_ID)
     ws_dst = api_retry_worksheet(sh_dst, DEST_SHEET_NAME)
     ws_dst.batch_clear(["A:G"])
